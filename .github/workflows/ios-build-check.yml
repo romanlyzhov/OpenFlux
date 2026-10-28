@@ -1,0 +1,49 @@
+name: iOS build check
+
+# Compiles the iOS app of a branch without signing: the same steps as
+# build_ios_app.sh up to the archive, with code signing turned off.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to build
+        required: true
+        default: ios-testflight
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Go static library
+        run: |
+          ./build_ios.sh
+          mkdir -p ios-app/Lib
+          cp output/ios/liboflux.a output/ios/liboflux.h ios-app/Lib/
+
+      - name: Shared Kotlin UI
+        run: ./gradlew --no-daemon :iosUi:linkReleaseFrameworkIosArm64 :iosUi:assembleIosArm64MainResources :shared:prepareComposeResourcesTaskForCommonMain
+
+      - name: Xcode project
+        run: |
+          brew install xcodegen
+          cd ios-app && xcodegen generate
+
+      - name: App build (unsigned)
+        working-directory: ios-app
+        run: xcodebuild -project OpenFlux.xcodeproj -scheme OpenFlux -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
