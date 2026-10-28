@@ -44,10 +44,15 @@ jobs:
       - name: Shared Kotlin UI
         run: ./gradlew --no-daemon :iosUi:linkReleaseFrameworkIosArm64 :iosUi:assembleIosArm64MainResources :shared:prepareComposeResourcesTaskForCommonMain
 
+      # The project's default iOS 15 target is raised to 16 in this checkout only: the Swift
+      # sources do not build for iOS 15 with this Xcode ('buildIf' is only available in
+      # iOS 16.0 or newer), which is unrelated to the check.
       - name: Xcode project
+        working-directory: ios-app
         run: |
           brew install xcodegen
-          cd ios-app && xcodegen generate
+          sed -i '' 's/iOS: "15.0"/iOS: "16.0"/' project.yml
+          xcodegen generate
 
       - name: App build (unsigned)
         working-directory: ios-app
